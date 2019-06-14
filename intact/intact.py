@@ -1,0 +1,411 @@
+import json
+import os
+import pkg_resources
+import re
+import subprocess
+import sys
+import uuid
+from Bio import AlignIO, pairwise2, Seq, SeqIO, SeqRecord
+
+import util.constants as const
+import util.subtypes as st
+import util.wrappers as wrappers
+
+
+START_CODON = 'ATG'
+
+WRONGORFNUMBER_ERROR = "WrongORFNumber"
+MISPLACEDORF_ERROR   = "MisplacedORF"
+LONGDELETION_ERROR   = "LongDeletion"
+DELETIONINORF_ERROR  = "DeletionInOrf"
+PSIDELETION_ERROR    = "PackagingSignalDeletion"
+PSINOTFOUND_ERROR    = "PackagingSignalNotComplete"
+RREDELETION_ERROR    = "RevResponseElementDeletion"
+
+class IntactnessError:
+    def __init__(self, sequence_name, error, message):
+        self.sequence_name = sequence_name
+        self.error = error
+        self.message = message
+
+class ORF:
+    def __init__(self, orientation, start, end):
+        self.orientation = orientation
+        self.start = start
+        self.end = end
+
+def has_packaging_signal(alignment, psi_locus, psi_tolerance):
+    """
+    Determines presence and possible intactness of HIV 
+    Packaging Signal Region.
+    
+    
+    Keyword Args:
+        
+        alignment -- multiple sequence alignment object containing the 
+                     reference and query sequence.
+        psi_locus -- tuple containing start and end coordinates of PSI wrt
+                     the reference being used.
+        psi_tolerance -- number of deletions in query tolerated to be intact
+        
+        
+    Internal Args:
+        
+        packaging_begin -- Aligned PSI start position.
+        packaging_end -- Aligned PSI end position.
+        query_start -- beginning position of query sequence.
+        query_psi -- extracted PSI region from query
+        query_psi_deletions -- number of deletions in query PSI region
+        
+        
+    Return:
+        
+        PSINOTFOUND_ERROR -- IntactnessError denoting query does not encompass
+                             the complete PSI region.
+        PSIDELETION_ERROR -- IntactnessError denoting query likely contains
+                             defective PSI.
+        None -- Denotes intact PSI.    
+    """
+    packaging_begin = [m.start() for m in re.finditer(r"[^-]",
+                       str(alignment[0].seq))][psi_locus[0]]
+    query_start = [m.start() for m in re.finditer(r"[^-]",
+                   str(alignment[1].seq))][0]
+    packaging_end = [m.start() for m in re.finditer(r"[^-]",
+                     str(alignment[0].seq))][psi_locus[1]]
+    if query_start > packaging_begin:
+        return IntactnessError(
+                alignment[1].id, PSINOTFOUND_ERROR,
+                "Query Start at reference position " + str(query_start)
+                + ". Does not encompass PSI at positions "
+                + str(packaging_begin) + " to " + str(packaging_end) + "."
+                )
+    #/end if
+    query_psi = str(alignment[1].seq[packaging_begin:packaging_end])
+    query_psi_deletions = len(re.findall(r"-", query_psi))
+    if query_psi_deletions > psi_tolerance:
+        return IntactnessError(
+                alignment[1].id, PSIDELETION_ERROR,
+                "Query Sequence exceeds maximum deletion tolerance in PSI. " + 
+                "Contains " + str(query_psi_deletions) + " indels with max "
+                + "tolerance of " + str(psi_tolerance) + " indels."
+                )
+    #/end if
+    return None
+#/end def has_packaging_signal
+
+def has_rev_response_element(alignment, rre_locus, rre_tolerance):
+    """
+    Determines presence and possible intactness of HIV 
+    Packaging Signal Region.
+    
+    
+    Keyword Args:
+        
+        alignment -- multiple sequence alignment object containing the 
+                     reference and query sequence.
+        rre_locus -- tuple containing start and end coordinates of RRE wrt
+                     the reference being used.
+        RRE_tolerance -- number of deletions in query tolerated to be intact
+        
+        
+    Internal Args:
+        
+        rre_begin -- Aligned RRE start position.
+        rre_end -- Aligned RRE end position.
+        query_rre -- extracted RRE region from query
+        query_rre_deletions -- number of deletions in query RRE region
+        
+        
+    Return:
+        
+        RREDELETION_ERROR -- IntactnessError denoting query likely contains
+                             defective RRE.
+        None -- Denotes intact RRE.    
+    """
+    rre_begin = [m.start() for m in re.finditer(r"[^-]",
+                       str(alignment[0].seq))][rre_locus[0]]
+    rre_end = [m.start() for m in re.finditer(r"[^-]",
+                     str(alignment[0].seq))][rre_locus[1]]
+    query_rre = str(alignment[1].seq[rre_begin:rre_end])
+    query_rre_deletions = len(re.findall(r"-", query_rre))
+    if query_rre_deletions > rre_tolerance:
+        return IntactnessError(
+                alignment[1].id, RREDELETION_ERROR,
+                "Query Sequence exceeds maximum deletion tolerance in RRE. " + 
+                "Contains " + str(query_rre_deletions) + " indels with max "
+                + "tolerance of " + str(rre_tolerance) + " indels."
+                )
+    #/end if
+    return None
+#/end def has_rev_response_element
+
+def reading_frames_single_stranded(alignment, sequence, length):
+    """
+    Find all reading frames longer than length in the forward strand
+    of the given sequence.
+
+    Args:
+        sequence: the sequence to check.
+        length: the minimum nucleotide length of a reading frame
+
+    Returns:
+        A list of tuples of (frame_start, frame_end)
+    """
+
+    # figure out where the query starts w.r.t HXB2 in case full
+    # genome consensus is not being used
+    # offset = re.search(r'[^-]', str(alignment[1].seq)).start()
+
+    # for each position in the query, figure out how many inserts and
+    # deletes we've seen with respect to the reference
+    delete_offset = []
+    insert_offset = []
+    delete_count = 0
+    insert_count = 0
+    for i in range(len(alignment[0])):
+        if alignment[1][i] == "-":
+            delete_count += 1
+            continue
+        if alignment[0][i] == "-":
+            insert_count += 1
+        delete_offset.append(delete_count)
+        insert_offset.append(insert_count)
+
+    long_frames = []
+
+    for frame in range(0, 3):
+
+        for_translation = sequence.seq[frame:]
+        for _ in range(3 - len(sequence.seq[frame:]) % 3):
+            for_translation += 'N'
+
+        protein = Seq.translate(for_translation)
+
+        current_start = 0
+        current_len = 0
+        
+
+        for i, elem in enumerate(protein):
+            if elem == "*":
+                fs = current_start * 3 + 1 + frame
+                frame_start = fs + delete_offset[fs] - insert_offset[fs]
+                fe = i * 3 + 1 + frame
+                frame_end = fe + delete_offset[fe] - insert_offset[fe]
+
+                if current_len * 3 >= length:
+                    long_frames.append(
+                        (frame_start, frame_end, delete_offset[fe] - delete_offset[fs])
+                    )
+                current_len = 0
+                continue
+            elif current_len == 0:
+                current_start = i
+
+            current_len += 1
+
+    long_frames.sort(key=lambda x: x[0])            
+
+    return long_frames
+
+def has_appropriate_reading_frames(
+    alignment,
+    sequence, length, 
+    forward_expected, reverse_expected, error_bar):
+    """
+    Check that a sequences has the appropriate number of reading frames
+    longer than a certain length in the appropriate strands and
+    positions.
+
+    Args:
+        sequence: the sequence to check.
+        length: the minimum nucleotide length of a reading frame.
+
+    Returns:
+        A list of tuples of (frame_start, frame_end)
+    """
+
+    forward_frames = reading_frames_single_stranded(
+                           alignment,
+                           sequence, length)
+    
+    tmp_reference = SeqRecord.SeqRecord(Seq.reverse_complement(alignment[0].seq),
+                                       id = alignment[0].id,
+                                       name = alignment[0].name
+                                       )
+    tmp_sequence_align = SeqRecord.SeqRecord(Seq.reverse_complement(alignment[1].seq),
+                                       id = alignment[1].id,
+                                       name = alignment[1].name
+                                       )
+    tmp_sequence = SeqRecord.SeqRecord(Seq.reverse_complement(sequence.seq),
+                                       id = sequence.id,
+                                       name = sequence.name
+                                       )
+    
+    reverse_alignment = [tmp_reference, tmp_sequence_align]
+    reverse_frames_r = reading_frames_single_stranded(
+                           reverse_alignment,
+                           tmp_sequence,
+                           length)
+    reverse_frames = [
+        (len(sequence.seq) - e + 1, len(sequence.seq) - s + 1, d) \
+            for s, e, d in reverse_frames_r
+    ]
+
+    for f_type, got, expected in [
+                                ("forward", forward_frames, forward_expected),
+                                ("reverse", reverse_frames, reverse_expected)
+                                 ]:
+
+
+        if len(got) != len(expected):
+            return orfs, IntactnessError(
+                sequence.id, WRONGORFNUMBER_ERROR,
+                "Expected " + str(len(expected)) 
+                + " " + f_type 
+                + " ORFs, got " + str(len(got))
+            )
+
+    orfs = []
+    errors = []
+    for f_type, got, expected in [
+                                ("forward", forward_frames, forward_expected),
+                                ("reverse", reverse_frames, reverse_expected)
+                                 ]:
+        for got_elem, expected_elem in zip(got, expected):
+
+            orfs.append(ORF(f_type, got_elem[0], got_elem[1]))
+
+            # ORF lengths and locations are incorrect
+            if got_elem[0] - expected_elem[0] > error_bar \
+            or expected_elem[1] - got_elem[1] > error_bar: 
+
+                errors.append(IntactnessError(
+                    sequence.id, MISPLACEDORF_ERROR,
+                    "Expected an ORF at " + str(expected_elem[0]) 
+                    + "-" + str(expected_elem[1]) 
+                    + " in the " + f_type + " strand, got " 
+                    + str(got_elem[0]) 
+                    + "-" + str(got_elem[1])
+                ))
+
+            # Max deletion allowed in ORF exceeded
+            if got_elem[2] > expected_elem[2]:
+
+                errors.append(IntactnessError(
+                    sequence.id, DELETIONINORF_ERROR,
+                    "ORF at " + str(got_elem[0]) 
+                    + "-" + str(got_elem[1]) 
+                    + " can have maximum deletions "
+                    + str(expected_elem[2]) + ", got " 
+                    + str(got_elem[2])
+                ))
+
+    return orfs, errors
+
+def intact( working_dir,
+            input_file,
+            subtype,
+            include_packaging_signal,
+            include_rre,
+            hxb2_forward_orfs = const.DEFAULT_FORWARD_ORFs,
+            hxb2_reverse_orfs = const.DEFAULT_REVERSE_ORFS,
+            hxb2_psi_locus = const.DEFAULT_PSI_LOCUS,
+            hxb2_rre_locus = const.DEFAULT_RRE_LOCUS,
+            min_orf_length = const.DEFAULT_ORF_LENGTH,
+            error_bar = const.DEFAULT_ERROR_BAR):
+    """
+    Check if a set of consensus sequences in a FASTA file is intact.
+
+    Args:
+        input_folder: folder of files from NGS machine.
+
+    Returns:
+        Name of a file containing all consensus sequences.
+    """
+
+    intact_sequences = []
+    non_intact_sequences = []
+    orfs = {}
+    errors = {}
+
+    # convert ORF positions to appropriate subtype
+    forward_orfs, reverse_orfs = [
+    [                       
+        (
+            st.convert_from_hxb2_to_subtype(working_dir, s, subtype), 
+            st.convert_from_hxb2_to_subtype(working_dir, e, subtype), 
+            delta
+        ) \
+        for (s, e, delta) in orfs
+    ] \
+    for orfs in [hxb2_forward_orfs, hxb2_reverse_orfs]
+    ]
+
+    # convert PSI locus and RRE locus to appropriate subtype
+    psi_locus = [st.convert_from_hxb2_to_subtype(working_dir, x, subtype) for x in hxb2_psi_locus]
+    rre_locus = [st.convert_from_hxb2_to_subtype(working_dir, x, subtype) for x in hxb2_rre_locus]
+
+    reference = st.subtype_sequence(subtype)
+
+    with open(input_file, 'r') as in_handle:
+        for sequence in SeqIO.parse(in_handle, "fasta"):
+            
+            alignment = wrappers.mafft(working_dir, [reference, sequence])
+            """
+            TODO: Add appropriateness check and exit
+            """
+            sequence_errors = []
+
+            sequence_orfs, orf_errors = has_appropriate_reading_frames(
+                alignment,
+                sequence, min_orf_length,
+                forward_orfs, reverse_orfs, error_bar)
+            sequence_errors.extend(orf_errors)
+            
+            if include_packaging_signal:
+                missing_psi_locus = has_packaging_signal(alignment,
+                                                     psi_locus,
+                                                     const.PSI_ERROR_TOLERANCE)
+                if missing_psi_locus is not None:
+                    sequence_errors.append(missing_psi_locus)
+
+            if include_rre:
+                missing_rre_locus = has_rev_response_element(alignment,
+                                                         rre_locus,
+                                                         const.RRE_ERROR_TOLERANCE
+                                                         )
+                if missing_rre_locus is not None:
+                    sequence_errors.append(missing_rre_locus)
+
+            orfs[sequence.id] = sequence_orfs
+            if len(sequence_errors) == 0:
+                intact_sequences.append(sequence)
+            else:
+                non_intact_sequences.append(sequence)
+                errors[sequence.id] = sequence_errors
+
+    intact_file = os.path.join(os.getcwd(), "intact.fasta")
+    with open(intact_file, 'w') as f:
+       SeqIO.write(intact_sequences, f, "fasta")
+
+    non_intact_file = os.path.join(os.getcwd(), "nonintact.fasta")
+    with open(non_intact_file, 'w') as f:
+        SeqIO.write(non_intact_sequences, f, "fasta")
+    
+    print(orfs)
+    
+    orf_file = os.path.join(os.getcwd(), "orfs.json")
+    with open(orf_file, 'w') as f:
+        f.write(json.dumps({seq: [x.__dict__ for x in sorfs] \
+                            for seq, sorfs in orfs.items()},
+                            indent=4))
+
+    error_file = os.path.join(os.getcwd(), "errors.json")
+    with open(error_file, 'w') as f:
+        f.write(json.dumps({seq: [x.__dict__ for x in serrors] \
+                            for seq,serrors in errors.items()}, 
+                            indent=4))
+
+    return intact_file, non_intact_file, orf_file, error_file
+#/end def intact
+#/end intact.py
