@@ -1,4 +1,4 @@
-# provirus-pipeline
+# intactness-pipeline
 A repository for developers looking to contribute to intactness pipeline work.
 
 # Installation instructions
