@@ -162,6 +162,7 @@ def reading_frames_single_stranded(alignment, sequence, length):
     insert_offset = []
     delete_count = 0
     insert_count = 0
+
     for i in range(len(alignment[0])):
         if alignment[1][i] == "-":
             delete_count += 1
@@ -208,7 +209,7 @@ def reading_frames_single_stranded(alignment, sequence, length):
     return long_frames
 
 def has_appropriate_reading_frames(
-    alignment,
+    alignment, reference,
     sequence, length, 
     forward_expected, reverse_expected, error_bar):
     """
@@ -223,16 +224,16 @@ def has_appropriate_reading_frames(
     Returns:
         A list of tuples of (frame_start, frame_end)
     """
-
+    
     forward_frames = reading_frames_single_stranded(
                            alignment,
                            sequence, length)
-    
+
     tmp_reference = SeqRecord.SeqRecord(Seq.reverse_complement(alignment[0].seq),
                                        id = alignment[0].id,
                                        name = alignment[0].name
                                        )
-    tmp_sequence_align = SeqRecord.SeqRecord(Seq.reverse_complement(alignment[1].seq),
+    tmp_subtype = SeqRecord.SeqRecord(Seq.reverse_complement(alignment[1].seq),
                                        id = alignment[1].id,
                                        name = alignment[1].name
                                        )
@@ -240,16 +241,21 @@ def has_appropriate_reading_frames(
                                        id = sequence.id,
                                        name = sequence.name
                                        )
-    
-    reverse_alignment = [tmp_reference, tmp_sequence_align]
-    reverse_frames_r = reading_frames_single_stranded(
+
+    reverse_alignment = [tmp_reference, tmp_subtype]
+    reverse_frames = reading_frames_single_stranded(
                            reverse_alignment,
                            tmp_sequence,
                            length)
-    reverse_frames = [
-        (len(sequence.seq) - e + 1, len(sequence.seq) - s + 1, d) \
-            for s, e, d in reverse_frames_r
-    ]
+
+    orfs = []
+    for f_type, got, expected in [
+                                ("forward", forward_frames, forward_expected),
+                                ("reverse", reverse_frames, reverse_expected)
+                                 ]:
+        for got_elem in got:
+            orfs.append(ORF(f_type, got_elem[0], got_elem[1]))
+
 
     for f_type, got, expected in [
                                 ("forward", forward_frames, forward_expected),
@@ -258,22 +264,19 @@ def has_appropriate_reading_frames(
 
 
         if len(got) != len(expected):
-            return orfs, IntactnessError(
+            return orfs, [IntactnessError(
                 sequence.id, WRONGORFNUMBER_ERROR,
                 "Expected " + str(len(expected)) 
                 + " " + f_type 
                 + " ORFs, got " + str(len(got))
-            )
-
-    orfs = []
+            )]
+    
     errors = []
     for f_type, got, expected in [
                                 ("forward", forward_frames, forward_expected),
                                 ("reverse", reverse_frames, reverse_expected)
                                  ]:
         for got_elem, expected_elem in zip(got, expected):
-
-            orfs.append(ORF(f_type, got_elem[0], got_elem[1]))
 
             # ORF lengths and locations are incorrect
             if got_elem[0] - expected_elem[0] > error_bar \
@@ -350,17 +353,21 @@ def intact( working_dir,
     with open(input_file, 'r') as in_handle:
         for sequence in SeqIO.parse(in_handle, "fasta"):
             
-            alignment = wrappers.mafft(working_dir, [reference, sequence])
-            """
-            TODO: Add appropriateness check and exit
-            """
             sequence_errors = []
+
+            alignment = wrappers.mafft(working_dir, [reference, sequence])           
 
             sequence_orfs, orf_errors = has_appropriate_reading_frames(
                 alignment,
-                sequence, min_orf_length,
+                reference, sequence, min_orf_length,
                 forward_orfs, reverse_orfs, error_bar)
             sequence_errors.extend(orf_errors)
+
+            hxb2_found_orfs = [ORF(
+                                    o.orientation,
+                                    st.convert_from_subtype_to_hxb2(working_dir, o.start, o.orientation, subtype),
+                                    st.convert_from_subtype_to_hxb2(working_dir, o.end, o.orientation, subtype)
+                              ) for o in sequence_orfs]
             
             if include_packaging_signal:
                 missing_psi_locus = has_packaging_signal(alignment,
@@ -377,7 +384,7 @@ def intact( working_dir,
                 if missing_rre_locus is not None:
                     sequence_errors.append(missing_rre_locus)
 
-            orfs[sequence.id] = sequence_orfs
+            orfs[sequence.id] = hxb2_found_orfs
             if len(sequence_errors) == 0:
                 intact_sequences.append(sequence)
             else:
@@ -391,8 +398,6 @@ def intact( working_dir,
     non_intact_file = os.path.join(os.getcwd(), "nonintact.fasta")
     with open(non_intact_file, 'w') as f:
         SeqIO.write(non_intact_sequences, f, "fasta")
-    
-    print(orfs)
     
     orf_file = os.path.join(os.getcwd(), "orfs.json")
     with open(orf_file, 'w') as f:

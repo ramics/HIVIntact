@@ -66,4 +66,31 @@ def convert_from_hxb2_to_subtype(working_dir, position, subtype):
         if alignment[1][i] != "-":
             subtype_pos += 1
 
+def convert_from_subtype_to_hxb2(working_dir, position, orientation, subtype):
+    """
+    Convert a position number in HXB2 to the equivalent in another subtype.
+
+    Args:
+        working_dir: working folder in which to place temporary files
+        position: hxb2 coordinate position to convert
+        subtype: subtype position to convert to
+    """
+
+    sequences = [subtype_sequence(subtype), HXB2()]
+    if orientation == "reverse":
+        sequences = [SeqRecord.SeqRecord(Seq.reverse_complement(s.seq),
+                                         id = s.id, name = s.name) for s in sequences]
+
+    alignment = wrappers.mafft(working_dir, sequences)
+
+    hxb2_pos = 0
+    subtype_pos = 0
+    for i in range(len(alignment[0])):
+        if subtype_pos == position:
+            return hxb2_pos
+        if alignment[0][i] != "-":
+            subtype_pos += 1
+        if alignment[1][i] != "-":
+            hxb2_pos += 1
+
 
