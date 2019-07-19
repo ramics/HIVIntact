@@ -208,6 +208,15 @@ def reading_frames_single_stranded(alignment, sequence, length):
 
     return long_frames
 
+def alignment_score(alignment):
+    """
+    Simple score for an alignment (just to find out if it's forward or
+    reverse - absolutely not a true genetic distance)
+    """
+
+    return sum([a==b for a, b in zip(alignment[0].seq, alignment[1].seq)])
+
+
 def has_appropriate_reading_frames(
     alignment, reference,
     sequence, length, 
@@ -263,7 +272,7 @@ def has_appropriate_reading_frames(
                                  ]:
 
 
-        if len(got) != len(expected):
+        if len(got) != len(expected) and len(expected) > 0:
             return orfs, [IntactnessError(
                 sequence.id, WRONGORFNUMBER_ERROR,
                 "Expected " + str(len(expected)) 
@@ -355,7 +364,22 @@ def intact( working_dir,
             
             sequence_errors = []
 
-            alignment = wrappers.mafft(working_dir, [reference, sequence])           
+            reverse_sequence = SeqRecord.SeqRecord(Seq.reverse_complement(sequence.seq),
+                                       id = sequence.id + " [REVERSED]",
+                                       name = sequence.name
+                                       )
+
+            
+            alignment = wrappers.mafft(working_dir, [reference, sequence])  
+            reverse_alignment = wrappers.mafft(working_dir, [reference, reverse_sequence])
+
+            forward_score = alignment_score(alignment)
+            reverse_score = alignment_score(reverse_alignment)
+            if alignment_score(reverse_alignment) > alignment_score(alignment):
+                print("Reversing sequence " + sequence.id + "; forward score " 
+                        + str(forward_score) + "; reverse score " + str(reverse_score))
+                alignment = reverse_alignment
+                sequence = reverse_sequence
 
             sequence_orfs, orf_errors = has_appropriate_reading_frames(
                 alignment,
