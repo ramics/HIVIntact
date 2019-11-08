@@ -18,6 +18,7 @@ WRONGORFNUMBER_ERROR = "WrongORFNumber"
 MISPLACEDORF_ERROR   = "MisplacedORF"
 LONGDELETION_ERROR   = "LongDeletion"
 DELETIONINORF_ERROR  = "DeletionInOrf"
+MSDMUTATED_ERROR = "MajorSpliceDonorSiteMutated"
 PSIDELETION_ERROR    = "PackagingSignalDeletion"
 PSINOTFOUND_ERROR    = "PackagingSignalNotComplete"
 RREDELETION_ERROR    = "RevResponseElementDeletion"
@@ -33,6 +34,48 @@ class ORF:
         self.orientation = orientation
         self.start = start
         self.end = end
+
+def has_mutated_major_splice_donor_site(alignment, 
+                                        splice_donor_start_pos, 
+                                        splice_donor_end_pos,
+                                        splice_donor_sequence):
+    """
+    Determines whether the major splice donor site is mutated.
+    Keyword Args:
+        
+        alignment -- multiple sequence alignment object containing the 
+                     reference and query sequence.
+        splice_donor_start_pos -- first position of splice donor site
+        splice_donor_end_pos -- last position of splice donor site
+        splice_donor_sequence - sequence of splice donor site
+    """
+
+    sd_begin = [m.start() for m in re.finditer(r"[^-]",
+                str(alignment[0].seq))][splice_donor_start_pos]
+    
+    sd_end = [m.start() for m in re.finditer(r"[^-]",
+              str(alignment[0].seq))][splice_donor_end_pos]
+    
+    sd = alignment[1].seq[sd_begin:(sd_end + 1)]
+
+    # splice donor site is missing from sequence
+    if all([x == "-" for x in sd]):
+        return None
+
+    if sd.upper() != splice_donor_sequence.upper():
+
+        return IntactnessError(
+                alignment[1].id, MSDMUTATED_ERROR,
+                "Query sequence has a mutated splice donor site, " 
+                + "".join(sd.upper()) + "."
+                )
+
+    return None
+
+    
+
+    
+    
 
 def has_packaging_signal(alignment, psi_locus, psi_tolerance):
     """
@@ -195,7 +238,7 @@ def reading_frames_single_stranded(alignment, sequence, length):
 
                 if current_len * 3 >= length:
                     long_frames.append(
-                        (frame_start, frame_end, delete_offset[fe] - delete_offset[fs])
+                        (frame_start, frame_end + 1, delete_offset[fe] - delete_offset[fs])
                     )
                 current_len = 0
                 continue
@@ -319,10 +362,12 @@ def intact( working_dir,
             subtype,
             include_packaging_signal,
             include_rre,
+            check_major_splice_donor_site,
             hxb2_forward_orfs = const.DEFAULT_FORWARD_ORFs,
             hxb2_reverse_orfs = const.DEFAULT_REVERSE_ORFS,
             hxb2_psi_locus = const.DEFAULT_PSI_LOCUS,
             hxb2_rre_locus = const.DEFAULT_RRE_LOCUS,
+            hxb2_msd_site_locus = const.DEFAULT_MSD_SITE_LOCUS,
             min_orf_length = const.DEFAULT_ORF_LENGTH,
             error_bar = const.DEFAULT_ERROR_BAR):
     """
@@ -407,6 +452,14 @@ def intact( working_dir,
                                                          )
                 if missing_rre_locus is not None:
                     sequence_errors.append(missing_rre_locus)
+            
+            if check_major_splice_donor_site:
+                mutated_splice_donor_site = has_mutated_major_splice_donor_site(alignment,
+                                                st.convert_from_hxb2_to_subtype(working_dir, hxb2_msd_site_locus, subtype),
+                                                st.convert_from_hxb2_to_subtype(working_dir, hxb2_msd_site_locus + 1, subtype),
+                                                const.DEFAULT_MSD_SEQUENCE)
+                if mutated_splice_donor_site is not None:
+                    sequence_errors.append(mutated_splice_donor_site)
 
             orfs[sequence.id] = hxb2_found_orfs
             if len(sequence_errors) == 0:
