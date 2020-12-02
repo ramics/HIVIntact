@@ -14,7 +14,7 @@ Install with:
 ```
 git clone --recurse-submodules git@github.com:ramics/intactness-pipeline
 cd intactness-pipeline
-virtualenv -p python3 --no-site-packages env
+virtualenv -p python3 env
 env/bin/pip install .
 ```
 
