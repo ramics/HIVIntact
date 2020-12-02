@@ -13,7 +13,7 @@ Install with:
 
 ```
 git clone --recurse-submodules git@github.com:ramics/intactness-pipeline
-cd provirus-pipeline
+cd intactness-pipeline
 virtualenv -p python3 --no-site-packages env
 env/bin/pip install .
 ```
@@ -24,7 +24,7 @@ Install with:
 
 ```
 git clone --recurse-submodules git@github.com/ramics/intactness-pipeline
-cd provirus-pipeline
+cd intactness-pipeline
 python3 setup.py build
 sudo python3 setup.py install
 ```
