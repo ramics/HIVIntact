@@ -12,7 +12,7 @@ The pipeline requires that the MAFFT multiple sequence aligner be installed.
 Install with:
 
 ```
-git clone --recurse-submodules git@github.com:SANBIHIV/provirus-pipeline
+git clone --recurse-submodules git@github.com:ramics/intactness-pipeline
 cd provirus-pipeline
 virtualenv -p python3 --no-site-packages env
 env/bin/pip install .
@@ -23,7 +23,7 @@ env/bin/pip install .
 Install with:
 
 ```
-git clone --recurse-submodules git@github.com/SANBIHIV/provirus-pipeline
+git clone --recurse-submodules git@github.com/ramics/intactness-pipeline
 cd provirus-pipeline
 python3 setup.py build
 sudo python3 setup.py install
