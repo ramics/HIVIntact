@@ -44,11 +44,13 @@ def cli():
 @click.option(
     '--check-major-splice-donor-site/--ignore-major-splice-donor-site', default=True)
 @click.option(
+    '--include-small-orfs/--exclude-small-orfs', default=False)
+@click.option(
     '--working-folder',
     default=os.getcwd()
 )
 def intact(input_file, subtype, include_packaging_signal, 
-            include_rre, check_major_splice_donor_site, working_folder):
+            include_rre, check_major_splice_donor_site, include_small_orfs, working_folder):
     """
     Check consensus sequences for intactness.
     """
@@ -62,7 +64,7 @@ def intact(input_file, subtype, include_packaging_signal,
     try:
         intact_sequences, non_intact_sequences, orfs, errors = it.intact(
             folder, input_file, subtype, include_packaging_signal, include_rre,
-            check_major_splice_donor_site
+            check_major_splice_donor_site, include_small_orfs
         )
         log.info('Intact sequences written to ' + intact_sequences)
         log.info('Non-intact sequences written to ' + non_intact_sequences)
