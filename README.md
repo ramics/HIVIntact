@@ -1,5 +1,5 @@
-# intactness-pipeline
-A repository for developers looking to contribute to intactness pipeline work.
+# HIVIntact
+An automated Python proviral intactness checker for HIV-1 consensus sequences.
 
 # Installation instructions
 
