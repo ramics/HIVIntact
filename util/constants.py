@@ -33,7 +33,7 @@ DEFAULT_MSD_SEQUENCE = "GT"
 
 # Packaging Signal Location -- HXB2 coordinates only
 DEFAULT_PSI_LOCUS = (680, 809)
-PSI_ERROR_TOLERANCE = 20 #20 Nucleotide deletion tolerance
+PSI_ERROR_TOLERANCE = 10 #10 Nucleotide deletion tolerance
 
 # Rev Response Element Location -- HXB2 coordinates only
 DEFAULT_RRE_LOCUS = (7755, 8020)
