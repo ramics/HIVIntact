@@ -321,7 +321,7 @@ def small_frames(
 
         # ORF lengths and locations are incorrect
         if (best_match[0] - e[1] > error_bar \
-        or e[2] - best_match[1] > error_bar) and e[0] != 'nef': 
+        or e[2] - best_match[1] > error_bar): 
             errors.append(IntactnessError(
                 sequence.id, MISPLACEDORF_ERROR,
                 "Expected a smaller ORF, " + str(e[0]) + ", at " + str(e[1]) 
