@@ -47,8 +47,11 @@ def cli():
     '--working-folder',
     default=os.getcwd()
 )
+@click.option(
+    '--run-hypermut/--no-hypermut', default=False
+)
 def intact(input_file, subtype, include_packaging_signal, 
-            include_rre, check_major_splice_donor_site, working_folder):
+            include_rre, check_major_splice_donor_site, run_hypermut, working_folder):
     """
     Check consensus sequences for intactness.
     """
@@ -62,7 +65,7 @@ def intact(input_file, subtype, include_packaging_signal,
     try:
         intact_sequences, non_intact_sequences, orfs, errors = it.intact(
             folder, input_file, subtype, include_packaging_signal, include_rre,
-            check_major_splice_donor_site
+            check_major_splice_donor_site, run_hypermut
         )
         log.info('Intact sequences written to ' + intact_sequences)
         log.info('Non-intact sequences written to ' + non_intact_sequences)

@@ -80,11 +80,15 @@ setup(
         'appdirs>=1.4.3',
         'biopython>=1.71',
         'click>=6.7',
+        'scipy>=1.6.0',
+        'numpy>1.19.5'
     ],
     setup_requires=[
         'appdirs>=1.4.3',
         'biopython>=1.71',
-        'click>=6.7'
+        'click>=6.7',
+        'scipy>=1.6.0',
+        'numpy>=1.19.5'
     ]
 )
 

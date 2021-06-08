@@ -6,6 +6,7 @@ import subprocess
 import sys
 import uuid
 from Bio import AlignIO, pairwise2, Seq, SeqIO, SeqRecord
+from scipy.stats import fisher_exact
 
 import util.constants as const
 import util.subtypes as st
@@ -18,10 +19,12 @@ WRONGORFNUMBER_ERROR = "WrongORFNumber"
 MISPLACEDORF_ERROR   = "MisplacedORF"
 LONGDELETION_ERROR   = "LongDeletion"
 DELETIONINORF_ERROR  = "DeletionInOrf"
-MSDMUTATED_ERROR = "MajorSpliceDonorSiteMutated"
+MSDMUTATED_ERROR     = "MajorSpliceDonorSiteMutated"
 PSIDELETION_ERROR    = "PackagingSignalDeletion"
 PSINOTFOUND_ERROR    = "PackagingSignalNotComplete"
 RREDELETION_ERROR    = "RevResponseElementDeletion"
+HYPERMUTATION_ERROR  = "APOBECHypermutationDetected"
+
 
 class IntactnessError:
     def __init__(self, sequence_name, error, message):
@@ -34,6 +37,76 @@ class ORF:
         self.orientation = orientation
         self.start = start
         self.end = end
+
+def _getPositions(pattern, string):
+    """
+    Hidden function used to get interator of all intances of pattern in string
+
+    Keyword Args:
+
+        pattern -- regex pattern to search for.
+        string -- input string to search in.
+
+    Return:
+        set of matched indices
+
+    """
+    return set(m.start() for m in re.finditer(pattern, string))
+#/end _getPositions
+
+def isHypermut(aln):
+    """
+    APOBEC3G/F hypermutation scan and test based on Rose and Korber, Bioinformatics (2000).
+    Briefly, scans reference for APOBEC possible signatures and non-signatures and performs
+    fisher test based on ratio of G->A in ref -> query at these signatures.
+
+    Keyword Args:
+        aln -- AlignIO object where aln[0] is the reference and aln[1] is the query.
+
+    Internal Args:
+        newAln -- all non-indel positions (i.e. removes all sites 
+            where a '-' exists in either sequence.
+        ref_str -- joined string from newAln[0]
+        qry_str -- joined string from newAln[1]
+
+        mutIndex -- APOBEC signature in qry_str
+        ctlIndex -- non-APOBEC signature in qry_str
+        gIndex -- all 'G' positions in ref
+        aIndex -- all 'A' positions in qry
+"""
+    mutIndex = _getPositions('(?=.[AG][^C])', str(aln[1].seq).upper())
+    ctlIndex = _getPositions('(?=.([CT].|[AG]C))', str(aln[1].seq).upper())
+    gIndex = _getPositions('G', str(aln[0].seq).upper())
+    aIndex = _getPositions('A', str(aln[1].seq).upper())
+
+    mutPoss = gIndex.intersection(mutIndex)
+    ctlPoss = gIndex.intersection(ctlIndex)
+
+    nMut = len(mutPoss.intersection(aIndex))
+    nCtl = len(ctlPoss.intersection(aIndex))
+
+    mutTot = len(gIndex.intersection(mutIndex))
+    ctlTot = len(gIndex.intersection(ctlIndex))
+
+    _, pval = fisher_exact(
+            [[nMut, mutTot - nMut],
+             [nCtl, ctlTot - nCtl]],
+            alternative = 'greater'
+        )
+
+    if pval < 0.05:
+        return IntactnessError(
+                aln[1].id, HYPERMUTATION_ERROR,
+                "Query sequence shows evidence of APOBEC3F/G-mediated" +
+                "hypermutation (p = " + str(pval) + ")."
+        )
+    #/end if
+    return None
+#/end isHypermut
+
+
+
+
 
 def has_mutated_major_splice_donor_site(alignment, 
                                         splice_donor_start_pos, 
@@ -363,6 +436,7 @@ def intact( working_dir,
             include_packaging_signal,
             include_rre,
             check_major_splice_donor_site,
+            run_hypermut,
             hxb2_forward_orfs = const.DEFAULT_FORWARD_ORFs,
             hxb2_reverse_orfs = const.DEFAULT_REVERSE_ORFS,
             hxb2_psi_locus = const.DEFAULT_PSI_LOCUS,
@@ -460,6 +534,12 @@ def intact( working_dir,
                                                 const.DEFAULT_MSD_SEQUENCE)
                 if mutated_splice_donor_site is not None:
                     sequence_errors.append(mutated_splice_donor_site)
+
+            if run_hypermut is not None:
+                hypermutated = isHypermut(alignment)
+
+                if hypermutated is not None:
+                    sequence_errors.append(hypermutated)
 
             orfs[sequence.id] = hxb2_found_orfs
             if len(sequence_errors) == 0:
