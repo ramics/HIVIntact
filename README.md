@@ -3,9 +3,37 @@ An automated Python proviral intactness checker for HIV-1 consensus sequences.
 
 # Installation instructions
 
-The pipeline is written in Python 3. The below installation instructions assume that Python 3 is already present on the system. If not, it can be installed via all package managers. In addition, for local installations, `pip` and `virtualenv` are also required.
+The pipeline is written in Python 3. The below installation instructions assume that Python 3 is already present on the system. If not, it can be installed via a package manager, e.g. for Debian-based systems:
 
-The pipeline requires that the MAFFT multiple sequence aligner be installed.
+```
+sudo apt install python3
+```
+
+or for RedHat-based systems:
+
+```
+sudo yum install python3
+```
+
+or for Macintosh-based systems:
+
+```
+sudo port install python3
+```
+
+Installation on Windows systems is not recommended.
+
+In addition, for local installations, `pip` and `virtualenv` are also required, and can be installed using the commands listed above.
+
+Finally, the pipeline requires that the MAFFT multiple sequence aligner be installed. Again, one of:
+
+```
+sudo apt install mafft
+sudo yum install mafft
+sudo port install mafft
+```
+
+depending on your operating system, should get you there.
 
 ### Local install (recommended)
 
