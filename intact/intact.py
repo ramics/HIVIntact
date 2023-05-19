@@ -672,14 +672,12 @@ def intact( working_dir,
                 intact_sequences.append(sequence)
             else:
                 non_intact_sequences.append(sequence)
-                errors[sequence.id] = sequence_errors
             
             # add the small orf errors after the intactness check if not included
             if not include_small_orfs:
-                if sequence.id in errors:
-                    errors[sequence.id].extend(small_orf_errors)
-                else:
-                    errors[sequence.id] = small_orf_errors
+                sequence_errors.extend(small_orf_errors)
+
+            errors[sequence.id] = sequence_errors
 
     intact_file = os.path.join(os.getcwd(), "intact.fasta")
     with open(intact_file, 'w') as f:
