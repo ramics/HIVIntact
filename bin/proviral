@@ -82,4 +82,4 @@ def intact(input_file, subtype, include_packaging_signal,
     shutil.rmtree(folder)
 
 if __name__ == '__main__':
-    cli()
+    intact()
