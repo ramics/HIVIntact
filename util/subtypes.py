@@ -35,7 +35,7 @@ def subtype_sequence(subtype):
     Args:
         subtype: folder in which to put temporary files.
     """
-	alignment = list(SeqIO.parse(os.path.join(REFERENCE_DIR, subtype + ".fasta"), "fasta"))
+	alignment = list(SeqIO.parse(alignment_file(subtype), "fasta"))
 	return SeqRecord.SeqRecord(
         Seq.Seq(str(alignment[0].seq).replace("-","").replace("\n", "")),
         id = alignment[0].id,
