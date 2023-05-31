@@ -47,15 +47,18 @@ def cli():
     '--run-hypermut/--no-hypermut', default=False
 )
 @click.option(
+    '--check-long-deletion/--ignore-long-deletion', default=False
+)
+@click.option(
     '--include-small-orfs/--exclude-small-orfs', default=False)
 @click.option(
     '--working-folder',
     default=os.getcwd()
 )
 
-def intact(input_file, subtype, include_packaging_signal, 
-        include_rre, check_major_splice_donor_site, run_hypermut, 
-        include_small_orfs, working_folder):
+def intact(input_file, subtype, include_packaging_signal,
+           include_rre, check_major_splice_donor_site, run_hypermut,
+           check_long_deletion, include_small_orfs, working_folder):
     """
     Check consensus sequences for intactness.
     """
@@ -69,7 +72,8 @@ def intact(input_file, subtype, include_packaging_signal,
     try:
         intact_sequences, non_intact_sequences, orfs, errors = it.intact(
             folder, input_file, subtype, include_packaging_signal, include_rre,
-            check_major_splice_donor_site, run_hypermut, include_small_orfs
+            check_major_splice_donor_site, run_hypermut, check_long_deletion,
+            include_small_orfs
         )
         log.info('Intact sequences written to ' + intact_sequences)
         log.info('Non-intact sequences written to ' + non_intact_sequences)
