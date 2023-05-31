@@ -107,7 +107,22 @@ def isHypermut(aln):
 #/end isHypermut
 
 
+def has_long_deletion(sequence, alignment):
+    """
+    Determines whether the sequence has a long deletion in it.
+    Keyword Args:
 
+        sequence -- the query sequence.
+        alignment -- multiple sequence alignment object containing the
+                     reference and query sequence.
+    """
+    # NOTE: This is the same check that HIVSeqInR uses.
+    if len(sequence.seq) < 8000:
+        return IntactnessError(sequence.id,
+                               LONGDELETION_ERROR,
+                               "Query sequence contains a long deletion.")
+    return None
+#/end has_long_deletion
 
 
 def has_mutated_major_splice_donor_site(alignment, 
@@ -554,6 +569,7 @@ def intact( working_dir,
             include_rre,
             check_major_splice_donor_site,
             run_hypermut,
+            check_long_deletion,
             include_small_orfs,
             hxb2_forward_orfs = const.DEFAULT_FORWARD_ORFs,
             hxb2_reverse_orfs = const.DEFAULT_REVERSE_ORFS,
@@ -666,6 +682,11 @@ def intact( working_dir,
 
                 if hypermutated is not None:
                     sequence_errors.append(hypermutated)
+
+            if check_long_deletion is not None:
+                long_deletion = has_long_deletion(sequence, alignment)
+                if long_deletion:
+                    sequence_errors.append(long_deletion)
 
             orfs[sequence.id] = hxb2_found_orfs
             if len(sequence_errors) == 0:
