@@ -1,131 +1,58 @@
 # HIVIntact
-An automated Python proviral intactness checker for HIV-1 consensus sequences.
 
-# Installation instructions
+**Find the genetically intact HIV-1 proviruses in a set of near full-length genomes.**
 
-The pipeline is written in Python 3. The below installation instructions assume that Python 3 is already present on the system. If not, it can be installed via a package manager, e.g. for Debian-based systems:
+Most proviruses that persist on antiretroviral therapy carry lethal defects. The rare intact ones make up the replication-competent reservoir, the target of HIV cure research. HIVIntact aligns each sequence to a subtype reference, tests it for every major class of defect, and sorts it into intact or defective with the reasons attached.
 
-```
-sudo apt install python3
-```
+It is a command-line tool with FASTA in and FASTA + JSON out, built to drop into high-throughput sequencing pipelines.
 
-or for RedHat-based systems:
+> Wright IA, Bale MJ, Shao W, Hu W-S, Coffin JM, Van Zyl GU, Kearney MF.
+> **HIVIntact: a python-based tool for HIV-1 genome intactness inference.**
+> *Retrovirology* 18, 16 (2021). [doi:10.1186/s12977-021-00561-5](https://doi.org/10.1186/s12977-021-00561-5)
 
-```
-sudo yum install python3
-```
+Validated on the Proviral Sequence Database: HIVIntact called 623 genomes intact where the database's own annotation gives 624.
 
-or for Macintosh-based systems:
+## What it checks
 
-```
-sudo port install python3
-```
+| Defect | Reported as | Default |
+|---|---|---|
+| Missing, misplaced, truncated or frameshifted *gag*, *pol*, *env* | `WrongORFNumber`, `MisplacedORF`, `DeletionInOrf`, `FrameshiftInOrf` | on |
+| Packaging signal (Ψ) deletion | `PackagingSignalDeletion` | on |
+| Rev response element deletion | `RevResponseElementDeletion` | on |
+| Major splice donor site mutation | `MajorSpliceDonorSiteMutated` | on |
+| APOBEC3G/F hypermutation (Fisher's exact test, after Rose & Korber 2000) | `APOBECHypermutationDetected` | on |
+| Defects in *vif*, *vpr*, *tat*, *rev*, *vpu*, *nef* | same ORF codes | reported; counted with `--include-small-orfs` |
 
-Installation on Windows systems is not recommended.
+Reverse-complemented input is detected and flipped automatically. Every check has an on/off switch; see `proviral intact --help`.
 
-In addition, for local installations, `pip` and `virtualenv` are also required, and can be installed using the commands listed above.
+## Install
 
-Finally, the pipeline requires that the MAFFT multiple sequence aligner be installed. Again, one of:
-
-```
-sudo apt install mafft
-sudo yum install mafft
-sudo port install mafft
-```
-
-depending on your operating system, should get you there.
-
-### Local install (recommended)
-
-Install with:
+Requires Python 3 and [MAFFT](https://mafft.cbrc.jp/alignment/software/) on your `PATH` (`apt install mafft`, `brew install mafft`, or `conda install -c bioconda mafft`).
 
 ```
-git clone --recurse-submodules git@github.com:ramics/intactness-pipeline
-cd intactness-pipeline
-virtualenv -p python3 env
-env/bin/pip install .
+git clone https://github.com/ramics/HIVIntact
+cd HIVIntact
+python3 -m venv env && source env/bin/activate
+pip install .
 ```
 
-### Global install
-
-Install with:
-
-```
-git clone --recurse-submodules git@github.com/ramics/intactness-pipeline
-cd intactness-pipeline
-python3 setup.py build
-sudo python3 setup.py install
-```
-
-Whichever way you choose to install, you'll get a number of warnings if tools needed by the pipeline or one of its dependencies aren't in your path, along with links to download and install those dependencies. 
-
-# Running the pipeline
-
-If you've installed locally, you need to activate the Python environment by running `source env/bin/activate`.
-
-Then run on a set of FASTA sequences with:
+## Run
 
 ```
 proviral intact --subtype B sequences.fasta
 ```
 
-See help (including how to switch various intactness tests on and off) at:
+Subtypes: `A1`, `A2`, `B`, `C`, `D`, `F1`, `F2`, `G`, `H`.
 
-```
-proviral intact --help
-```
+Four files land in the current directory:
 
-Currently available subtypes can be seen by listing the `util/subtype_alignments` folder.
+| File | Contents |
+|---|---|
+| `intact.fasta` | Sequences that passed every enabled check |
+| `nonintact.fasta` | Sequences with at least one defect |
+| `errors.json` | The defects found in each sequence |
+| `orfs.json` | ORF locations for every sequence, in HXB2 coordinates |
 
-This will return four files:
+## Pairs with
 
-* `intact.fasta`: all consensus sequences considered to be intact.
-* `nonintact.fasta`: all consensus sequences not considered to be intact.
-* `orfs.json`: locations of ORFs in all sequences.
-* `errors.json`: a JSON dump of the reasons why some sequences were considered not intact.
-
-# Development instructions
-
-## git flow
-
-We're using `git flow` for this project. The package `git-flow` can be installed on most OSes. To get started, go to the `provirus-pipeline` repo on your machine and type:
-
-```
-git flow init
-```
-
-Press enter until you hit the command line again. Then, to develop a feature, say the ability to detect long deletions, type:
-
-```
-git flow feature start long-deletions
-```
-
-You'll now be on a feature branch. If you'd like other people to collborate on your feature branch, you'll need to publish it.  Type:
-
-```
-git flow feature publish long-deletions
-```
-
-Hack away until you're satisfied, then type:
-
-```
-git flow feature finish long-deletions
-```
-
-Follow the instructions, and this will merge your feature into develop.  You can then `git push` to develop, and your feature will be included in the next release.
-
-## Releases
-
-A release is a merge to master.  The `master` branch of this github repo is blocked with a review guard, meaning before you merge `develop` into `master`, you need to open a **pull request** on github from `develop` into `master` and get it reviewed by another contributor.  This is to keep code quality high.
-
-Please bump at least the minor version in `setup.py` with every release.
-
-## Other tips
-
-To reinstall locally without reinstalling dependencies or bumping the version, run:
-
-```
-env/bin/pip install --force-reinstall --no-deps --upgrade .
-```
-
-
+[NanoHIV](https://github.com/ramics/NanoHIV) builds the near full-length consensus genomes from Oxford Nanopore reads; HIVIntact tells you which of them are intact.
