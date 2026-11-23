@@ -1,11 +1,10 @@
 import os
-import pkg_resources
 from Bio import Seq, SeqIO, SeqRecord
 
 import util.wrappers as wrappers
 
 
-REFERENCE_DIR = pkg_resources.resource_filename('util', 'subtype_alignments/')
+REFERENCE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'subtype_alignments')
 
 def HXB2():
     """

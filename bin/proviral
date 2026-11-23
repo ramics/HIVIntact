@@ -44,7 +44,7 @@ def cli():
 @click.option(
     '--check-major-splice-donor-site/--ignore-major-splice-donor-site', default=True)
 @click.option(
-    '--run-hypermut/--no-hypermut', default=False
+    '--run-hypermut/--no-hypermut', default=True
 )
 @click.option(
     '--include-small-orfs/--exclude-small-orfs', default=False)

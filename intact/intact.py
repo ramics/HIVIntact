@@ -1,6 +1,5 @@
 import json
 import os
-import pkg_resources
 import re
 import subprocess
 import sys
@@ -661,7 +660,7 @@ def intact( working_dir,
                 if mutated_splice_donor_site is not None:
                     sequence_errors.append(mutated_splice_donor_site)
 
-            if run_hypermut is not None:
+            if run_hypermut:
                 hypermutated = isHypermut(alignment)
 
                 if hypermutated is not None:

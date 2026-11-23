@@ -1,4 +1,3 @@
-import pkg_resources
 import os
 
 # Constants for intactness
